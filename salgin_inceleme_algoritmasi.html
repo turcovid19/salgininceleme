@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salgın İnceleme Algoritması | Saha Epidemiyolojisi</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f1a;
+    --panel: #111827;
+    --panel2: #1a2236;
+    --border: #1e3a5f;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff14;
+    --accent4: #ffd700;
+    --warn: #ff4757;
+    --text: #e2e8f0;
+    --text-dim: #8899aa;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  header {
+    position: relative; z-index: 10;
+    background: linear-gradient(180deg, #0a1628 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 22px 28px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .header-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .badge {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.15em; padding: 4px 10px; border-radius: 2px; text-transform: uppercase;
+  }
+  .badge-red { background: rgba(255,71,87,0.2); color: var(--warn); border: 1px solid var(--warn); }
+  .badge-blue { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid var(--border); }
+  h1 { font-family: var(--mono); font-size: clamp(14px,2.5vw,22px); font-weight: 600; color: #fff; }
+  h1 span { color: var(--accent); }
+  .header-sub { font-size: 11px; color: var(--text-dim); font-family: var(--mono); letter-spacing: 0.04em; }
+  .progress-container {
+    position: relative; z-index: 10;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 14px 28px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .progress-label { font-family: var(--mono); font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+  .progress-bar { flex: 1; min-width: 160px; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent3)); border-radius: 3px; transition: width 0.5s ease; width: 10%; }
+  .step-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+  .step-pill {
+    width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim); transition: all 0.3s;
+  }
+  .step-pill.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.1); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+  .step-pill.done { border-color: var(--accent3); color: var(--accent3); background: rgba(57,255,20,0.08); }
+  main { position: relative; z-index: 10; max-width: 880px; margin: 0 auto; padding: 28px 20px 90px; }
+  .step-card { display: none; animation: slideIn 0.35s ease; }
+  .step-card.active { display: block; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  .step-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px; }
+  .step-number {
+    flex-shrink: 0; width: 48px; height: 48px; border: 2px solid var(--accent); border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--accent);
+    background: rgba(0,212,255,0.05); box-shadow: 0 0 14px rgba(0,212,255,0.15);
+  }
+  .step-title-block h2 { font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .step-subtitle { font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; }
+  .info-block { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+  .info-block.warn { border-color: var(--warn); background: rgba(255,71,87,0.05); }
+  .info-block.success { border-color: var(--accent3); background: rgba(57,255,20,0.04); }
+  .info-block.highlight { border-color: var(--accent4); background: rgba(255,215,0,0.04); }
+  .info-block-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 11px; display: flex; align-items: center; gap: 7px; }
+  .info-block-title .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .info-block.warn .dot { background: var(--warn); }
+  .info-block.success .dot { background: var(--accent3); }
+  .info-block.highlight .dot { background: var(--accent4); }
+  .checklist { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .checklist li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--text); cursor: pointer; }
+  .checklist li .ck {
+    flex-shrink: 0; width: 17px; height: 17px; border: 1px solid var(--border); border-radius: 3px;
+    margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 10px;
+  }
+  .checklist li:hover .ck { border-color: var(--accent); }
+  .checklist li.checked .ck { background: var(--accent3); border-color: var(--accent3); color: #000; font-weight: 700; }
+  .checklist li.checked > span { text-decoration: line-through; color: var(--text-dim); }
+  .question-block { background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+  .question-text { font-size: 14px; font-weight: 500; margin-bottom: 14px; line-height: 1.5; }
+  .question-text strong { color: var(--accent); }
+  .btn-row { display: flex; gap: 9px; flex-wrap: wrap; }
+  .btn { padding: 9px 18px; border-radius: var(--radius); border: 1px solid; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+  .btn-primary { background: rgba(0,212,255,0.1); border-color: var(--accent); color: var(--accent); }
+  .btn-primary:hover { background: rgba(0,212,255,0.2); }
+  .btn-danger { background: rgba(255,71,87,0.1); border-color: var(--warn); color: var(--warn); }
+  .btn-danger:hover { background: rgba(255,71,87,0.2); }
+  .btn-success { background: rgba(57,255,20,0.08); border-color: var(--accent3); color: var(--accent3); }
+  .btn-success:hover { background: rgba(57,255,20,0.15); }
+  .btn-warn { background: rgba(255,215,0,0.08); border-color: var(--accent4); color: var(--accent4); }
+  .btn-warn:hover { background: rgba(255,215,0,0.15); }
+  .btn-next { background: linear-gradient(135deg, var(--accent), #0090cc); border-color: transparent; color: #000; font-weight: 700; }
+  .btn-next:hover { filter: brightness(1.1); box-shadow: 0 4px 14px rgba(0,212,255,0.4); }
+  .alert { padding: 12px 14px; border-radius: var(--radius); font-size: 13px; margin-top: 12px; display: none; line-height: 1.5; border-left: 3px solid; }
+  .alert.show { display: block; animation: slideIn 0.3s ease; }
+  .alert-red { background: rgba(255,71,87,0.1); border-color: var(--warn); color: #ff8fa3; }
+  .alert-green { background: rgba(57,255,20,0.07); border-color: var(--accent3); color: #7fff00; }
+  .alert-yellow { background: rgba(255,215,0,0.07); border-color: var(--accent4); color: var(--accent4); }
+  .alert-blue { background: rgba(0,212,255,0.07); border-color: var(--accent); color: var(--accent); }
+  .field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 11px; margin-bottom: 14px; }
+  .field-group label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 5px; }
+  .field-group input, .field-group select, .field-group textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px 11px; color: var(--text); font-family: var(--mono); font-size: 12px; transition: border-color 0.2s; outline: none;
+  }
+  .field-group input:focus, .field-group textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,212,255,0.1); }
+  .field-group textarea { resize: vertical; min-height: 70px; }
+  .epi-curve { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
+  .curve-title { font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-bottom: 11px; letter-spacing: 0.07em; }
+  .curve-options { display: flex; gap: 10px; flex-wrap: wrap; }
+  .curve-option { flex: 1; min-width: 130px; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; transition: all 0.2s; text-align: center; }
+  .curve-option:hover, .curve-option.selected { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .curve-option .curve-icon { font-size: 24px; margin-bottom: 7px; }
+  .curve-option .curve-label { font-size: 11px; font-weight: 600; margin-bottom: 3px; }
+  .curve-option .curve-desc { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 14px; }
+  .data-table th { background: var(--panel2); border: 1px solid var(--border); padding: 9px 12px; text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); }
+  .data-table td { border: 1px solid var(--border); padding: 9px 12px; color: var(--text); line-height: 1.4; }
+  .data-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .data-table td strong { color: var(--accent4); }
+  .flowchart { display: flex; flex-direction: column; margin-bottom: 14px; }
+  .flow-node { display: flex; align-items: stretch; }
+  .flow-connector { display: flex; flex-direction: column; align-items: center; width: 36px; flex-shrink: 0; }
+  .flow-line { width: 2px; background: var(--border); flex: 1; min-height: 16px; }
+  .flow-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin: 3px 0; }
+  .flow-content { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin: 5px 0; font-size: 12px; line-height: 1.5; }
+  .flow-content .flow-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+  .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .result-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .result-card-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 7px; }
+  .result-card-value { font-size: 13px; font-weight: 500; color: var(--text); min-height: 18px; }
+  .nav-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10,15,26,0.96); border-top: 1px solid var(--border);
+    backdrop-filter: blur(12px); padding: 12px 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  }
+  .nav-info { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  .nav-info span { color: var(--accent); }
+  .divider { height: 1px; background: var(--border); margin: 18px 0; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+  @media (max-width: 600px) {
+    .two-col { grid-template-columns: 1fr; }
+    header { padding: 14px; }
+    main { padding: 14px 14px 90px; }
+    .nav-bar { padding: 10px 14px; }
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .pulse { animation: pulse 2s infinite; }
+  .final-summary { background: linear-gradient(135deg, var(--panel), var(--panel2)); border: 1px solid var(--accent); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; box-shadow: 0 0 20px rgba(0,212,255,0.1); }
+  .final-summary h3 { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 14px; }
+  .attack-display { font-family: var(--mono); font-size: 22px; color: var(--accent3); margin-top: 8px; }
+  .attack-hint { font-size: 11px; color: var(--text-dim); margin-top: 5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <span class="badge badge-red pulse">⚠ ACİL</span>
+    <span class="badge badge-blue">İSHAL SALGINI</span>
+    <h1><span>SAHA</span> EPİDEMİYOLOJİSİ — SALGIN İNCELEME ALGORİTMASI</h1>
+  </div>
+  <div class="header-sub">CDC Field Epi Manual · T.C. Sağlık Bakanlığı HSGM Saha Epidemiyolojisi · Klimik Salgın İnceleme Kılavuzu</div>
+</header>
+
+<div class="progress-container">
+  <span class="progress-label">ADIM <span id="cur-step">1</span>/10</span>
+  <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+  <div class="step-pills" id="step-pills"></div>
+</div>
+
+<main>
+
+<!-- ADIM 1 -->
+<div class="step-card active" id="step-1">
+  <div class="step-header">
+    <div class="step-number">01</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Başlangıç</div>
+      <h2>Saha Çalışmasına Hazırlık</h2>
+    </div>
+  </div>
+  <div class="info-block warn">
+    <div class="info-block-title"><div class="dot"></div>ACİL DEĞERLENDİRME</div>
+    <p style="font-size:13px;line-height:1.6;">Acil servise birden fazla ishal vakası geldiğinde <strong style="color:var(--accent)">salgın şüphesi</strong> oluşur. Sahaya çıkmadan önce operasyonel hazırlığı tamamlayın. Amaç, yetki ve ekip rollerini netleştirmek hem yanlış anlaşılmaları hem de gecikmeleri önler.</p>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>HAZIRLIK KONTROLLİSTESİ</div>
+    <ul class="checklist" id="ck-1">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Yetkili resmi makamdan saha inceleme <strong>davet / görevlendirme yazısı</strong> alındı (İl/İlçe Sağlık Müdürlüğü)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Ekip rolleri ve sorumlulukları belirlendi: epidemiyolog, laboratuvar uzmanı, çevre sağlığı personeli</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Laboratuvar koordinasyonu sağlandı — hangi örnekler, hangi testler, hangi laboratuvar</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>KKE (kişisel koruyucu ekipman) ihtiyacı değerlendirildi ve temin edildi</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Standart vaka kayıt formu ve sorgulama anketi hazırlandı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>İletişim kanalları kuruldu (ekip, hastane, üst birim)</span></li>
+    </ul>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>TEMEL SAHA BİLGİLERİNİ KAYDEDIN</div>
+    <div class="field-grid">
+      <div class="field-group"><label>Bildirim Tarihi / Saati</label><input type="datetime-local" id="f-bildirim-tarih"></div>
+      <div class="field-group"><label>Saha Adı / Lokasyon</label><input type="text" id="f-lokasyon" placeholder="Köy, mahalle, kurum..."></div>
+      <div class="field-group"><label>Bildiren Birim</label><input type="text" id="f-bildiren" placeholder="Hastane, ASM, ..."></div>
+      <div class="field-group"><label>Saha Epidemiyologu</label><input type="text" id="f-epi" placeholder="Ad Soyad"></div>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-next" onclick="nextStep()">Hazırlık Tamamlandı → Adım 2</button>
+  </div>
+</div>
+
+<!-- ADIM 2 -->
+<div class="step-card" id="step-2">
+  <div class="step-header">
+    <div class="step-number">02</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Doğrulama</div>
+      <h2>Tanıyı Kesinleştirme</h2>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>İSHAL SALGINI İÇİN KLİNİK TANIMLAR</div>
+    <table class="data-table">
+      <tr><th>Tanım Türü</th><th>Kriter</th><th>Notlar</th></tr>
+      <tr><td><strong>Şüpheli Vaka</strong></td><td>24 saatte ≥3 gevşek/sulu dışkılama</td><td>Bulantı, kusma, ateş eşlik edebilir</td></tr>
+      <tr><td><strong>Olası Vaka</strong></td><td>Şüpheli vaka + ortak maruziyet (gıda/su)</td><td>Aynı grup veya lokasyon</td></tr>
+      <tr><td><strong>Kesin Vaka</strong></td><td>Olası vaka + laboratuvar doğrulaması</td><td>Etken izolasyonu veya seroloji</td></tr>
+    </table>
+  </div>
+  <div class="question-block">
+    <div class="question-text">İlk vakalarda <strong>laboratuvar örneği</strong> alındı mı?</div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="showAlert('a2a')">✔ Evet, örnek alındı</button>
+      <button class="btn btn-danger" onclick="showAlert('a2b')">✘ Hayır / Henüz alınmadı</button>
+    </div>
+    <div class="alert alert-green" id="a2a">✔ İyi — Örnekleri soğuk zincirle referans laboratuvara ivedilikle gönderin. İshal etkenleri için: dışkı kültürü, multiplex PCR, parazit incelemesi isteyebilirsiniz.</div>
+    <div class="alert alert-red" id="a2b">⚠ Kritik Eksiklik — Hastanedeki vakalar tedavi altındaysa dışkı örneği alın (0.5–1 g, uygun besiyeri tüpüne). Antibiyotik başlandıysa bunu kayıt altına alın; kültür sonuçlarını etkiler.</div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>ALINMASI GEREKEN ÖRNEKLER</div>
+    <ul class="checklist" id="ck-2">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span><strong>Dışkı kültürü</strong> — Salmonella, Shigella, E. coli O157:H7, Campylobacter, Vibrio</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span><strong>Viral panel</strong> — Rotavirus, Norovirus, Adenovirus antijen / PCR</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span><strong>Parazit incelemesi</strong> — Doğrudan mikroskopi + konsantrasyon yöntemi (Giardia, Cryptosporidium, E. histolytica)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span><strong>Kan kültürü</strong> — Ateş ≥38.5°C veya sistemik belirti olan vakalarda</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span><strong>Çevresel örnek</strong> — Şüpheli su veya gıda kaynağından mümkün olan en kısa sürede</span></li>
+    </ul>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Tanı Doğrulandı → Adım 3</button>
+  </div>
+</div>
+
+<!-- ADIM 3 -->
+<div class="step-card" id="step-3">
+  <div class="step-header">
+    <div class="step-number">03</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Salgın Varlığı</div>
+      <h2>Salgının Var Olduğunu Ortaya Koymak</h2>
+    </div>
+  </div>
+  <div class="info-block highlight">
+    <div class="info-block-title"><div class="dot"></div>TEMEL KAVRAM</div>
+    <p style="font-size:13px;line-height:1.6;"><strong style="color:var(--accent4)">Salgın:</strong> Belirli bir popülasyonda, belirli bir zaman diliminde beklenen sayıdan daha fazla vakanın görülmesi. Vaka sayısı artmış görünse bile <em>psödo-epidemi</em> ihtimalini ekarte edin (lab hatası, değişen bildirim sistemi, yeni tanı kriteri).</p>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>MEVCUT DURUM VERİLERİ</div>
+    <div class="field-grid">
+      <div class="field-group"><label>Mevcut Vaka Sayısı</label><input type="number" id="f-vaka" placeholder="0" oninput="calcAttack()"></div>
+      <div class="field-group"><label>Risk Altındaki Kişi Sayısı</label><input type="number" id="f-risk" placeholder="0" oninput="calcAttack()"></div>
+      <div class="field-group"><label>Geçen Yıl Aynı Dönem Vakası</label><input type="number" id="f-gecen" placeholder="Bilinmiyorsa 0"></div>
+      <div class="field-group"><label>Salgın Süresi (Gün)</label><input type="number" id="f-sure" placeholder="Ör: 3"></div>
+    </div>
+    <div class="info-block success" style="margin-top:11px;padding:13px;">
+      <div class="info-block-title"><div class="dot"></div>HESAPLANAN ATAK HIZI</div>
+      <div class="attack-display" id="attack-rate">— %</div>
+      <div class="attack-hint">Primer atak hızı = Hastalanan / Risk altındaki × 100</div>
+    </div>
+  </div>
+  <div class="question-block">
+    <div class="question-text">Psödo-epidemi ihtimali ekarte edildi mi? <strong>(Laboratuvar hatası, değişen bildirim sistemi, yeni tanı kriteri?)</strong></div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="showAlert('a3a')">✔ Gerçek salgın — Devam</button>
+      <button class="btn btn-warn" onclick="showAlert('a3b')">⚠ Emin değilim</button>
+    </div>
+    <div class="alert alert-green" id="a3a">✔ Salgın varlığı doğrulandı. Vakalar vaka tanımına uyuyor, lab hataları ve sürveyans değişiklikleri ekarte edildi.</div>
+    <div class="alert alert-yellow" id="a3b">⚠ Aynı dönemde laboratuvar prosedüründe değişiklik var mı? Bildirim oranı neden arttı? Farklı klinisyenlerden çapraz doğrulama alın.</div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Salgın Doğrulandı → Adım 4</button>
+  </div>
+</div>
+
+<!-- ADIM 4 -->
+<div class="step-card" id="step-4">
+  <div class="step-header">
+    <div class="step-number">04</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Tanımlayıcı Epidemiyoloji</div>
+      <h2>Vakaların Dağılım Özelliklerini Belirlemek</h2>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>3 TEMEL BOYUT: ZAMAN · YER · KİŞİ</div>
+    <p style="font-size:13px;color:var(--text-dim);line-height:1.6;">Her salgında "kim, ne zaman, nerede hastalandı" sorusunu yanıtlamak, kaynak ve bulaşma yoluna ilişkin hipotez geliştirmenin anahtarıdır.</p>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>🕐 ZAMAN — SALGIN EĞRİSİ TİPİNİ BELİRLEYİN</div>
+    <div class="epi-curve">
+      <div class="curve-title">Vakalarınızın zaman dağılımı hangi paterne uymaktadır?</div>
+      <div class="curve-options">
+        <div class="curve-option" onclick="selectCurve(this,'tek-kisa')">
+          <div class="curve-icon">📊</div>
+          <div class="curve-label">Tek Kaynaklı (Kısa)</div>
+          <div class="curve-desc">Ani artış, hızlı düşüş<br>Nokta kaynak</div>
+        </div>
+        <div class="curve-option" onclick="selectCurve(this,'tek-uzun')">
+          <div class="curve-icon">📈</div>
+          <div class="curve-label">Tek Kaynaklı (Uzun)</div>
+          <div class="curve-desc">Geniş plato<br>Süregelen maruziyet</div>
+        </div>
+        <div class="curve-option" onclick="selectCurve(this,'kesikli')">
+          <div class="curve-icon">〰️</div>
+          <div class="curve-label">Kesik Kesik</div>
+          <div class="curve-desc">Aralıklı maruziyet<br>Periyodik temas</div>
+        </div>
+        <div class="curve-option" onclick="selectCurve(this,'kisi-kisi')">
+          <div class="curve-icon">📉</div>
+          <div class="curve-label">Kişiden Kişiye</div>
+          <div class="curve-desc">Dalgalı artış<br>Sekonder vakalar</div>
+        </div>
+      </div>
+      <div class="alert alert-blue" id="curve-alert" style="margin-top:10px;"></div>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title"><div class="dot"></div>📍 YER BİLGİLERİ</div>
+      <ul class="checklist" id="ck-4a">
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Vakaların coğrafi dağılım haritası çizildi</span></li>
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Kümelenme (klaster) bölgesi tespit edildi</span></li>
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Su kaynakları, gıda işletmeleri, etkinlik alanları işaretlendi</span></li>
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Bölgenin coğrafi ve sosyoekonomik özellikleri not edildi</span></li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title"><div class="dot"></div>👤 KİŞİ ÖZELLİKLERİ</div>
+      <ul class="checklist" id="ck-4b">
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Yaş ve cinsiyet dağılımı analiz edildi</span></li>
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Ortak gıda/su tüketimi sorgulandı</span></li>
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Seyahat öyküsü alındı</span></li>
+        <li onclick="toggleCheck(this)"><span class="ck"></span><span>Ortak etkinlik/tören/toplantı katılımı sorgulandı</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Dağılım Belirlendi → Adım 5</button>
+  </div>
+</div>
+
+<!-- ADIM 5 -->
+<div class="step-card" id="step-5">
+  <div class="step-header">
+    <div class="step-number">05</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Hipotez</div>
+      <h2>Vaka Tanımı ve Hipotez Geliştirme</h2>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>VAKA TANIMI BİLEŞENLERİ (KİŞİ – YER – ZAMAN – KLİNİK)</div>
+    <div class="field-grid">
+      <div class="field-group" style="grid-column:span 2;"><label>Klinik Kriterler</label><textarea id="f-klinik">24 saatte ≥3 gevşek/sulu dışkılama, bulantı/kusma eşlik edebilir, ateş ≥37.5°C</textarea></div>
+      <div class="field-group"><label>Başlangıç Tarihi</label><input type="date" id="f-baslangic"></div>
+      <div class="field-group"><label>Etkilenen Bölge (Yer)</label><input type="text" id="f-yer" placeholder="Köy/mahalle/kurum"></div>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>İSHAL SALGINLARINDA OLASI KAYNAKLAR</div>
+    <table class="data-table">
+      <tr><th>Kaynak Türü</th><th>Tipik Etkenler</th><th>İnkübasyon</th><th>İşaret Eden Bulgular</th></tr>
+      <tr><td><strong>Kontamine Su</strong></td><td>Vibrio, E. coli, Cryptosporidium, Giardia</td><td>1–14 gün</td><td>Aynı su şebekesi, patlak boru, yağış sonrası</td></tr>
+      <tr><td><strong>Gıda Kaynaklı</strong></td><td>Salmonella, Staph. aureus, C. perfringens</td><td>1–72 saat</td><td>Ortak yemek, toplu etkinlik, belirli gıda tüketimi</td></tr>
+      <tr><td><strong>Kişiden Kişiye</strong></td><td>Norovirus, Rotavirus, Shigella, HAV</td><td>1–4 gün</td><td>Sekonder vakalar, okul/yurt/bakımevi ortamı</td></tr>
+      <tr><td><strong>Zoonotik</strong></td><td>Salmonella, Campylobacter, E. coli O157</td><td>1–7 gün</td><td>Hayvan teması, çiğ süt/et tüketimi</td></tr>
+    </table>
+  </div>
+  <div class="question-block">
+    <div class="question-text">Mevcut verilere göre <strong>en kuvvetli hipotez</strong> hangisi?</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="selectHypothesis('su')">💧 Su Kaynaklı</button>
+      <button class="btn btn-warn" onclick="selectHypothesis('gida')">🍽️ Gıda Kaynaklı</button>
+      <button class="btn btn-danger" onclick="selectHypothesis('kisi')">👥 Kişiden Kişiye</button>
+      <button class="btn btn-success" onclick="selectHypothesis('zoo')">🐄 Zoonotik</button>
+    </div>
+    <div class="alert alert-blue" id="hyp-alert"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Hipotez Kuruldu → Adım 6</button>
+  </div>
+</div>
+
+<!-- ADIM 6 -->
+<div class="step-card" id="step-6">
+  <div class="step-header">
+    <div class="step-number">06</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Analitik Çalışma</div>
+      <h2>Hipotezi Test Etmek</h2>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>ANALİTİK EPİDEMİYOLOJİ YÖNTEMLERİ</div>
+    <table class="data-table">
+      <tr><th>Yöntem</th><th>Ne Zaman?</th><th>Ölçüt</th></tr>
+      <tr><td><strong>Kohort Çalışması</strong></td><td>Küçük, tanımlı popülasyon (düğün, yemek, tören)</td><td>Relatif Risk (RR), Atak Hızı</td></tr>
+      <tr><td><strong>Vaka-Kontrol Çalışması</strong></td><td>Büyük / belirsiz popülasyon</td><td>Odds Ratio (OR)</td></tr>
+    </table>
+  </div>
+  <div class="question-block">
+    <div class="question-text">Etkilenen popülasyon <strong>tanımlı ve küçük mü?</strong></div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="showAlert('a6a')">✔ Evet — Tanımlı küçük popülasyon</button>
+      <button class="btn btn-warn" onclick="showAlert('a6b')">⚠ Hayır — Geniş / belirsiz popülasyon</button>
+    </div>
+    <div class="alert alert-green" id="a6a">✔ <strong>KOHORT ÇALIŞMASI</strong> önerilir. Etkinliğe katılan tüm bireyleri listeleyin. Her gıda/su için atak hızı ve RR hesaplayın. Hastalanmayanlar ile hastalananlardaki maruziyet oranını karşılaştırın.</div>
+    <div class="alert alert-yellow" id="a6b">⚠ <strong>VAKA-KONTROL ÇALIŞMASI</strong> önerilir. 50+ vaka: 1 vakaya 1 kontrol; daha az vakada 1 vakaya 2–4 kontrol. Kontroller, aynı çevreden aynı dönemde sağlıklı bireyler olmalı. Her maruziyet için OR hesaplayın.</div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>ANKETİN KAPSAMASI GEREKENLER</div>
+    <ul class="checklist" id="ck-6">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Semptom başlangıç tarihi ve saati</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Son 72 saat içinde tüketilen gıdalar (liste halinde)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>İçme suyu kaynağı (şebeke, kuyu, kaynak, şişe)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Dışarıda yemek yeme (lokanta, seyyar satıcı, tören)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Benzer şikayeti olan kişilerle temas</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Hayvan teması (ahır, çiftlik, evcil hayvan)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Son 2 hafta içinde seyahat</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Kronik hastalık / immünsupresyon</span></li>
+    </ul>
+  </div>
+  <div class="info-block highlight">
+    <div class="info-block-title"><div class="dot"></div>İSTATİSTİKSEL DEĞERLENDİRME</div>
+    <div style="font-family:var(--mono);font-size:12px;line-height:2.1;">
+      <span style="color:var(--accent4)">Kohort:</span> RR = (Maruz kalan atak hızı) / (Maruz kalmayan atak hızı)<br>
+      <span style="color:var(--accent4)">Vaka-Kontrol:</span> OR = (Vakada maruziyet +/−) / (Kontrolde maruziyet +/−)<br>
+      <span style="color:var(--accent4)">Anlamlılık:</span> p &lt; 0.05 veya %95 GA, RR/OR'u 1 kapsamıyorsa
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Hipotez Test Edildi → Adım 7</button>
+  </div>
+</div>
+
+<!-- ADIM 7 -->
+<div class="step-card" id="step-7">
+  <div class="step-header">
+    <div class="step-number">07</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Acil Müdahale</div>
+      <h2>Kontrol ve Önlem Tedbirleri</h2>
+    </div>
+  </div>
+  <div class="info-block warn">
+    <div class="info-block-title"><div class="dot"></div>⚠ KRİTİK: Kontrol tedbirleri analitik sonuçları BEKLEMEZ</div>
+    <p style="font-size:13px;line-height:1.6;">Hipotez güçlüyse analitik sonuçlar gelmeden kontrol tedbirlerini hemen başlatın. Salgının yayılmasını engellemek, kesin kanıt beklemeye değer.</p>
+  </div>
+  <div class="flowchart">
+    <div class="flow-node">
+      <div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-tag">🚰 Su Kaynaklı Şüphesi</div>
+        Şüpheli su kaynağını kapatın veya kullanımı yasaklayın. Su numunesi alın. Alternatif su temini sağlayın. Sistemi klor ile dezenfekte edin. Halka "kaynatma / arıtma" talimatı verin.
+      </div>
+    </div>
+    <div class="flow-node">
+      <div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-tag">🍽️ Gıda Kaynaklı Şüphesi</div>
+        Şüpheli gıdayı menüden/piyasadan kaldırın. Gıda numunesini muhafaza edin. İşletmeyi denetleyin; hijyen eksiklikleri varsa geçici olarak faaliyeti durdurun. HACCP uygulamalarını kontrol edin.
+      </div>
+    </div>
+    <div class="flow-node">
+      <div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-tag">👥 Kişiden Kişiye Bulaşma</div>
+        Hasta izolasyonu (evde/kurumsal). El hijyeni eğitimi ve malzeme dağıtımı. Kalabalık ortamlarda (okul, yurt) geçici kapanma değerlendirmesi. Temas takibi ve aktif izleme.
+      </div>
+    </div>
+    <div class="flow-node">
+      <div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-tag">🏥 Klinik Yönetim</div>
+        Ağır vaka / dehidratasyon → hastaneye yönlendirme. Oral rehidrasyon tuzunu (ORT) toplulukta yaygınlaştırın. Antibiyotik endikasyonlarını etken ve klinik duruma göre belirleyin.
+      </div>
+    </div>
+    <div class="flow-node">
+      <div class="flow-connector"><div class="flow-dot"></div></div>
+      <div class="flow-content">
+        <div class="flow-tag">📢 Risk İletişimi</div>
+        Topluluğu şeffaf ve net bilgilendirin. Yetkili mercilere ve gerekiyorsa medyaya bilgi notu hazırlayın. Yanlış bilgi yayılımını önleyin.
+      </div>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>KONTROL TEDBİRLERİ KONTROLLİSTESİ</div>
+    <ul class="checklist" id="ck-7">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Acil çevre/gıda tedbiri alındı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Hasta izolasyon/yönetim protokolü aktive edildi</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Aktif vaka taraması başlatıldı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Toplum bilgilendirmesi yapıldı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Tedbir uygulamasını izleme mekanizması kuruldu</span></li>
+    </ul>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Kontrol Başlatıldı → Adım 8</button>
+  </div>
+</div>
+
+<!-- ADIM 8 -->
+<div class="step-card" id="step-8">
+  <div class="step-header">
+    <div class="step-number">08</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">İzleme</div>
+      <h2>Aktif Sürveyans ve Vaka Takibi</h2>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>AKTİF SÜRVEYANS STRATEJİSİ</div>
+    <ul class="checklist" id="ck-8">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Etkilenen bölgedeki tüm sağlık tesisleri bilgilendirildi (pasif bildirim aktivasyonu)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Aktif kapı kapı (door-to-door) tarama başlatıldı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Yeni vaka bildirim hattı oluşturuldu</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Günlük vaka sayısı ve salgın eğrisi güncelleniyor</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Kritik popülasyonlar önceliklendirildi (yaşlı, bebek, bağışıklığı baskılılar)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Kontrol tedbirlerinin etkinliği değerlendiriliyor</span></li>
+    </ul>
+  </div>
+  <div class="info-block highlight">
+    <div class="info-block-title"><div class="dot"></div>HASTANE ACİL SERVİS İZLEME NOKTALARI</div>
+    <table class="data-table">
+      <tr><th>Gösterge</th><th>Değerlendirme</th></tr>
+      <tr><td>Günlük yeni başvuru sayısı</td><td>Artış trendi → müdahaleyi güçlendirin</td></tr>
+      <tr><td>Hastaneye yatış oranı</td><td>%10 üzeri → ağır salgın, kapasiteyi artırın</td></tr>
+      <tr><td>Dehidratasyon oranı</td><td>Yüksekse ORT uygulamasını yaygınlaştırın</td></tr>
+      <tr><td>Tedbir sonrası yeni vakalar</td><td>Devam ediyorsa kaynağı yeniden değerlendirin</td></tr>
+    </table>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">İzleme Başlatıldı → Adım 9</button>
+  </div>
+</div>
+
+<!-- ADIM 9 -->
+<div class="step-card" id="step-9">
+  <div class="step-header">
+    <div class="step-number">09</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Raporlama</div>
+      <h2>Sonuç Raporu Hazırlama</h2>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>SALGIN İNCELEME RAPORUNUN ZORUNLU BÖLÜMLERİ</div>
+    <div class="flowchart">
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-content"><div class="flow-tag">1. Yönetici Özeti</div>Salgının 2–3 cümlelik tanımı, temel bulgular, alınan tedbirler</div></div>
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-content"><div class="flow-tag">2. Giriş ve Arka Plan</div>Salgın bildiriminin nasıl geldiği, ilk yanıt, coğrafi bağlam</div></div>
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-content"><div class="flow-tag">3. Yöntemler</div>Vaka tanımı, veri kaynakları, çalışma tasarımı, istatistiksel yöntemler</div></div>
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-content"><div class="flow-tag">4. Bulgular</div>Vaka sayısı, atak hızı, salgın eğrisi, ZYK analizi, lab sonuçları, RR / OR</div></div>
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-content"><div class="flow-tag">5. Tartışma</div>Hipotezin desteklenme durumu, alternatif açıklamalar, sınırlılıklar</div></div>
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div><div class="flow-line"></div></div><div class="flow-content"><div class="flow-tag">6. Sonuç ve Öneriler</div>Alınan tedbirler, gelecekteki önleyici öneriler, sistem iyileştirme önerileri</div></div>
+      <div class="flow-node"><div class="flow-connector"><div class="flow-dot"></div></div><div class="flow-content"><div class="flow-tag">7. Ekler</div>Ham veri tabloları, anket formu, haritalar, laboratuvar raporları</div></div>
+    </div>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>BİLDİRİM ZORUNLULUKLARI (TÜRKİYE)</div>
+    <ul class="checklist" id="ck-9">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>İlçe/İl Sağlık Müdürlüğü'ne bildirim yapıldı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Halk Sağlığı Genel Müdürlüğü'ne (HSGM) bildirim yapıldı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Salgın İnceleme Formu (SİF) eksiksiz dolduruldu</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Salgın kayıt defterine işlendi</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Gerekiyorsa komşu il/ilçelere uyarı gönderildi</span></li>
+    </ul>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+    <button class="btn btn-next" onclick="nextStep()">Rapor Hazırlandı → Adım 10</button>
+  </div>
+</div>
+
+<!-- ADIM 10 -->
+<div class="step-card" id="step-10">
+  <div class="step-header">
+    <div class="step-number">10</div>
+    <div class="step-title-block">
+      <div class="step-subtitle">Kapanış</div>
+      <h2>Salgın Kapanma Kriterleri ve Ders Çıkarma</h2>
+    </div>
+  </div>
+  <div class="info-block success">
+    <div class="info-block-title"><div class="dot"></div>SALGININ KAPANDIĞINI GÖSTERİR KRİTERLER</div>
+    <ul class="checklist" id="ck-10a">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>En az <strong>2 inkübasyon periyodu</strong> boyunca yeni vaka çıkmadı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Kontrol tedbirleri uygulandı ve etkinlik doğrulandı</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Kaynak ortadan kaldırıldı (dezenfeksiyon, gıda imhası vb.)</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Aktif sürveyans devam ediyor, artış gözlemlenmiyor</span></li>
+    </ul>
+  </div>
+  <div class="info-block">
+    <div class="info-block-title"><div class="dot"></div>DERS ÇIKARMA — SONRAKI SALGINLARI ÖNLEMEK</div>
+    <ul class="checklist" id="ck-10b">
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Su kalitesi izleme sisteminin güçlendirilmesi önerildi mi?</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Gıda güvenliği denetimlerinin sıklaştırılması önerildi mi?</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Toplum el hijyeni ve gıda güvenliği eğitimi planlandı mı?</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Erken uyarı mekanizmaları (sentinel sürveyans) gözden geçirildi mi?</span></li>
+      <li onclick="toggleCheck(this)"><span class="ck"></span><span>Ekip deneyimi yazılı olarak belgelendi mi?</span></li>
+    </ul>
+  </div>
+  <div class="final-summary">
+    <h3>📋 SAHA İNCELEME ÖZETİ</h3>
+    <div class="results-grid" id="summary-grid">
+      <div class="result-card"><div class="result-card-label">Lokasyon</div><div class="result-card-value" id="s-lokasyon">—</div></div>
+      <div class="result-card"><div class="result-card-label">Bildirim Tarihi</div><div class="result-card-value" id="s-tarih">—</div></div>
+      <div class="result-card"><div class="result-card-label">Atak Hızı</div><div class="result-card-value" id="s-atak">—</div></div>
+      <div class="result-card"><div class="result-card-label">Salgın Eğrisi Tipi</div><div class="result-card-value" id="s-egri">—</div></div>
+      <div class="result-card"><div class="result-card-label">Temel Hipotez</div><div class="result-card-value" id="s-hyp">—</div></div>
+      <div class="result-card"><div class="result-card-label">Saha Epidemiyologu</div><div class="result-card-value" id="s-epi-s">—</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button>
+      <button class="btn btn-primary" onclick="resetAlgo()">↺ Yeni Salgın İncelemesi</button>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()">← Geri</button>
+  </div>
+</div>
+
+</main>
+
+<div class="nav-bar">
+  <div class="nav-info">Adım <span id="nav-cur">1</span>/10 — <span id="nav-title">Saha Çalışmasına Hazırlık</span></div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="prevStep()" id="btn-prev" style="display:none">← Önceki</button>
+    <button class="btn btn-next" onclick="nextStep()" id="btn-next-bot">Sonraki →</button>
+  </div>
+</div>
+
+<script>
+  const stepTitles = ['','Saha Çalışmasına Hazırlık','Tanıyı Kesinleştirme','Salgının Varlığını Ortaya Koymak','Dağılım Özelliklerini Belirlemek','Vaka Tanımı & Hipotez','Hipotezi Test Etmek','Kontrol ve Önlem Tedbirleri','Aktif Sürveyans','Sonuç Raporu Hazırlama','Kapanma Kriterleri & Ders Çıkarma'];
+  let currentStep = 1;
+  const totalSteps = 10;
+  let selectedCurve = '—';
+  let selectedHyp = '—';
+
+  function initPills() {
+    const c = document.getElementById('step-pills');
+    c.innerHTML = '';
+    for (let i = 1; i <= totalSteps; i++) {
+      const d = document.createElement('div');
+      d.className = 'step-pill' + (i === 1 ? ' active' : '');
+      d.id = 'pill-' + i;
+      d.textContent = i;
+      c.appendChild(d);
+    }
+  }
+  initPills();
+
+  function updateUI() {
+    document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('step-' + currentStep).classList.add('active');
+    for (let i = 1; i <= totalSteps; i++) {
+      const p = document.getElementById('pill-' + i);
+      p.className = 'step-pill';
+      if (i < currentStep) p.classList.add('done');
+      if (i === currentStep) p.classList.add('active');
+    }
+    document.getElementById('prog-fill').style.width = (currentStep / totalSteps * 100) + '%';
+    document.getElementById('cur-step').textContent = currentStep;
+    document.getElementById('nav-cur').textContent = currentStep;
+    document.getElementById('nav-title').textContent = stepTitles[currentStep];
+    document.getElementById('btn-prev').style.display = currentStep > 1 ? 'block' : 'none';
+    document.getElementById('btn-next-bot').style.display = currentStep < totalSteps ? 'block' : 'none';
+    if (currentStep === 10) updateSummary();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function nextStep() { if (currentStep < totalSteps) { currentStep++; updateUI(); } }
+  function prevStep() { if (currentStep > 1) { currentStep--; updateUI(); } }
+
+  function toggleCheck(el) {
+    el.classList.toggle('checked');
+    el.querySelector('.ck').textContent = el.classList.contains('checked') ? '✓' : '';
+  }
+
+  function showAlert(id) {
+    const parent = document.getElementById(id).parentElement;
+    parent.querySelectorAll('.alert').forEach(a => a.classList.remove('show'));
+    document.getElementById(id).classList.add('show');
+  }
+
+  function calcAttack() {
+    const v = parseFloat(document.getElementById('f-vaka').value) || 0;
+    const r = parseFloat(document.getElementById('f-risk').value) || 0;
+    document.getElementById('attack-rate').textContent = r > 0 ? (v / r * 100).toFixed(1) + ' %' : '— %';
+  }
+
+  function selectCurve(el, type) {
+    document.querySelectorAll('.curve-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    const msgs = {
+      'tek-kisa': { t: 'Nokta Kaynak Salgını (Point Source)', m: 'Tüm vakalar kısa bir zaman diliminde (1 inkübasyon süresi içinde) ortaya çıkmış. Ortak, tek seferlik bir maruziyet düşünün: ziyafet, toplantı, ortak gıda tüketimi. Kaynağı tespit etmek göreceli olarak daha kolaydır.' },
+      'tek-uzun': { t: 'Süregelen Kaynak Salgını', m: 'Vakalar uzun süre devam ediyor. Süregelen veya aralıklı kontaminasyon var olabilir: kirli su şebekesi, sürekli hizmet veren bir gıda işletmesi.' },
+      'kesikli': { t: 'Kesik Kesik (Aralıklı) Kaynak', m: 'Periyodik maruziyet: belirli günlerde satışa çıkan bir ürün, haftanın belirli günlerinde su kesintisi sonrası baskı değişimi, düzensiz dağıtım vb.' },
+      'kisi-kisi': { t: 'Yayılımcı / Kişiden Kişiye Salgın', m: 'Salgın dalgalar halinde büyüyor. Norovirus, Shigella, Rotavirus gibi bulaşıcı etkenler düşünün. İzolasyon ve el hijyeni tedbirlerini hemen aktive edin.' }
+    };
+    const m = msgs[type];
+    selectedCurve = m.t;
+    const a = document.getElementById('curve-alert');
+    a.className = 'alert alert-blue show';
+    a.innerHTML = '<strong>' + m.t + '</strong><br>' + m.m;
+  }
+
+  function selectHypothesis(type) {
+    const msgs = {
+      'su': { t: '💧 Su Kaynaklı Hipotez', m: 'Su örnekleri toplayın (şebeke, kaynak, kuyu). Bakteri kültürü + kimyasal analiz isteyin. Su altyapısını inceleyin: patlak boru, klor düzeyi, tesis yakınlığı. Belediye su idaresiyle koordine edin.', c: 'alert-blue' },
+      'gida': { t: '🍽️ Gıda Kaynaklı Hipotez', m: 'Şüpheli gıdaları listeleyin, kalan örnekleri güvence altına alın. Gıda işletmesini denetleyin. Tüm katılımcılara gıda tüketim anketi uygulayın.', c: 'alert-yellow' },
+      'kisi': { t: '👥 Kişiden Kişiye Bulaşma Hipotezi', m: 'Sekonder atak hızı hesaplayın. Temas ağını haritalandırın. İzolasyon ve el hijyeni protokollerini aktive edin. Okul, yurt ve bakımevi ortamlarına dikkat edin.', c: 'alert-red' },
+      'zoo': { t: '🐄 Zoonotik Hipotez', m: 'Hayvan temasını araştırın: çiğ süt/et, çiftlik hayvanları, evcil hayvanlar. Veteriner birimleriyle koordinasyon sağlayın. Campylobacter, STEC O157, Brucella arayın.', c: 'alert-green' }
+    };
+    const m = msgs[type];
+    selectedHyp = m.t;
+    const a = document.getElementById('hyp-alert');
+    a.className = 'alert ' + m.c + ' show';
+    a.innerHTML = '<strong>' + m.t + '</strong><br>' + m.m;
+  }
+
+  function updateSummary() {
+    document.getElementById('s-lokasyon').textContent = document.getElementById('f-lokasyon').value || '—';
+    const t = document.getElementById('f-bildirim-tarih').value;
+    document.getElementById('s-tarih').textContent = t ? new Date(t).toLocaleString('tr-TR') : '—';
+    document.getElementById('s-atak').textContent = document.getElementById('attack-rate').textContent;
+    document.getElementById('s-egri').textContent = selectedCurve;
+    document.getElementById('s-hyp').textContent = selectedHyp;
+    document.getElementById('s-epi-s').textContent = document.getElementById('f-epi').value || '—';
+  }
+
+  function resetAlgo() {
+    if (!confirm('Yeni bir salgın incelemesi başlatmak istiyor musunuz? Mevcut veriler silinecek.')) return;
+    document.querySelectorAll('input, textarea').forEach(el => { el.value = ''; });
+    document.querySelectorAll('.checklist li').forEach(li => { li.classList.remove('checked'); li.querySelector('.ck').textContent = ''; });
+    document.querySelectorAll('.alert').forEach(a => a.classList.remove('show'));
+    document.querySelectorAll('.curve-option').forEach(o => o.classList.remove('selected'));
+    document.getElementById('attack-rate').textContent = '— %';
+    selectedCurve = '—'; selectedHyp = '—';
+    currentStep = 1; updateUI();
+  }
+</script>
+</body>
+</html>
